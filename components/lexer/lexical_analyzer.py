@@ -17,6 +17,7 @@ class LexicalAnalyzer:
         self.comment_start_single = "//"
         self.comment_start_multi = "/*"
         self.comment_end_multi = "*/"
+        self.dot_operator = "."
 
     def tokenize(self, code):
         tokens = []
@@ -33,16 +34,20 @@ class LexicalAnalyzer:
 
             # Single-line comments
             if code[i:i + 2] == self.comment_start_single:
+                start = i
                 while i < length and code[i] != "\n":
                     i += 1
+                tokens.append(f"COMMENT: {code[start:i]}")  # Token for single-line comment
                 continue
 
             # Multi-line comments
             if code[i:i + 2] == self.comment_start_multi:
+                start = i
                 i += 2
                 while i < length and code[i:i + 2] != self.comment_end_multi:
                     i += 1
                 i += 2  # Skip closing */
+                tokens.append(f"COMMENT: {code[start:i]}")  # Token for multi-line comment
                 continue
 
             # Identifiers and Keywords
@@ -132,9 +137,15 @@ class LexicalAnalyzer:
                 i += 1
                 continue
 
+            if char in self.dot_operator:
+                tokens.append(f"DOT_OPERATOR: {char}")
+                i += 1
+                continue
+
             # Unknown Characters
             tokens.append(f"UNKNOWN: {char}")
             i += 1
 
         return tokens
+
 
