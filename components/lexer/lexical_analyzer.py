@@ -85,22 +85,28 @@ class LexicalAnalyzer:
                 tokens.append(f"STRING: {code[start:i]}")
                 continue
 
-            # Operators (Arithmetic, Boolean, Relational, Assignment, Unary)
-            if char in self.arithmetic_operators or char in self.unary_operators:
-                start = i
-                if i + 1 < length and code[i:i + 2] in self.arithmetic_operators.union(self.unary_operators):
+            # Check for two-character operators first (+=, -=, *=, /=, etc.)
+            if i + 1 < length:
+                two_char_operator = code[i:i + 2]
+                if two_char_operator in self.arithmetic_operators.union(self.assignment_operators,
+                                                                        self.unary_operators):
+                    tokens.append(f"OPERATOR: {two_char_operator}")
                     i += 2
-                    tokens.append(f"OPERATOR: {code[start:i]}")
-                else:
-                    tokens.append(f"OPERATOR: {char}")
-                    i += 1
+                    continue
+
+            # Then check for single-character operators (like +, -, *, /)
+            if char in self.arithmetic_operators or char in self.unary_operators:
+                tokens.append(f"OPERATOR: {char}")
+                i += 1
                 continue
 
+            # Check for boolean operators
             if code[i:i + 2] in self.boolean_operators:
                 tokens.append(f"BOOLEAN_OPERATOR: {code[i:i + 2]}")
                 i += 2
                 continue
 
+            # Check for relational operators
             if code[i:i + 2] in self.relational_operators or char in self.relational_operators:
                 start = i
                 if i + 1 < length and code[i:i + 2] in self.relational_operators:
@@ -110,6 +116,7 @@ class LexicalAnalyzer:
                 tokens.append(f"RELATIONAL_OPERATOR: {code[start:i]}")
                 continue
 
+            # Check for assignment operators
             if char in self.assignment_operators or code[i:i + 2] in self.assignment_operators:
                 start = i
                 if i + 1 < length and code[i:i + 2] in self.assignment_operators:
@@ -130,3 +137,4 @@ class LexicalAnalyzer:
             i += 1
 
         return tokens
+

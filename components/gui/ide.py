@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from components.lexer import LexicalAnalyzer
-from components.parser import SyntaxAnalyzer
+#from components.parser import SyntaxAnalyzer
 from components.filehandling.file_operations import FileOperations
 from components.filehandling.output_handler import OutputHandler
 
@@ -13,7 +13,7 @@ class HiveScriptIDE:
         self.file_path = None
 
         self.lexical_analyzer = LexicalAnalyzer()
-        self.syntax_analyzer = SyntaxAnalyzer()
+        #self.syntax_analyzer = SyntaxAnalyzer()
 
         # Main frame
         main_frame = tk.Frame(root)
