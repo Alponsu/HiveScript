@@ -79,6 +79,7 @@ class HiveScriptIDE:
         # Run menu
         run_menu = tk.Menu(self.menu, tearoff=0)
         run_menu.add_command(label="Lexical Analysis", command=self.lexical_analysis)
+        run_menu.add_command(label="Save Lexical Analysis to PDF", command=self.save_lexical_to_pdf)
         run_menu.add_command(label="Syntax Analysis", command=self.syntax_analysis)
         self.menu.add_cascade(label="Run", menu=run_menu)
 
@@ -123,6 +124,20 @@ class HiveScriptIDE:
         result = "\n".join(tokens)
 
         OutputHandler.display_output(self.output, "Lexical Analysis:\n" + result)
+
+    def save_lexical_to_pdf(self):
+        code = self.editor.get(1.0, tk.END).strip()
+        if not code:
+            messagebox.showwarning("Warning", "No code to analyze for PDF output.")
+            return
+
+        tokens = self.lexical_analyzer.tokenize(code)
+        file_path = FileOperations.save_lexical_output_to_pdf(tokens)
+
+        if file_path:
+            messagebox.showinfo("Success", f"Lexical Analysis saved as PDF at {file_path}")
+        else:
+            messagebox.showerror("Error", "Failed to save the output as PDF.")
 
     def syntax_analysis(self):
         code = self.editor.get(1.0, tk.END).strip()
