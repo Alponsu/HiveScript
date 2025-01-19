@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from components.lexer import LexicalAnalyzer
-#from components.parser import SyntaxAnalyzer
+# from components.parser import SyntaxAnalyzer
 from components.filehandling.file_operations import FileOperations
 from components.filehandling.output_handler import OutputHandler
 
@@ -13,46 +13,58 @@ class HiveScriptIDE:
         self.file_path = None
 
         self.lexical_analyzer = LexicalAnalyzer()
-        #self.syntax_analyzer = SyntaxAnalyzer()
+        # self.syntax_analyzer = SyntaxAnalyzer()
 
         # Main frame
         main_frame = tk.Frame(root)
-        main_frame.pack(fill=tk.BOTH, expand=1)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Editor and line numbers frame
+        editor_frame = tk.Frame(main_frame)
+        editor_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Line numbers
         self.line_numbers = tk.Text(
-            main_frame, width=4, padx=3, takefocus=0, border=0, background="lightgray", state="disabled", font=("Courier", 12)
+            editor_frame,
+            width=4,
+            padx=3,
+            takefocus=0,
+            border=0,
+            background="lightgray",
+            state="disabled",
+            font=("Courier", 12),
         )
         self.line_numbers.pack(side=tk.LEFT, fill=tk.Y)
 
-        # Editor frame
-        editor_frame = tk.Frame(main_frame)
-        editor_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
-
+        # Editor
         self.editor = tk.Text(editor_frame, wrap="none", undo=True, font=("Courier", 12))
-        self.editor.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
+        self.editor.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.editor.bind("<KeyRelease>", self.update_line_numbers)
         self.editor.bind("<MouseWheel>", self.sync_scroll)
 
-        # Scrollbars for editor
+        # Scrollbars for the editor
         y_scroll = tk.Scrollbar(editor_frame, orient=tk.VERTICAL, command=self.on_editor_scroll)
         y_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.editor.config(yscrollcommand=y_scroll.set)
 
-        x_scroll = tk.Scrollbar(main_frame, orient=tk.HORIZONTAL, command=self.editor.xview)
-        x_scroll.pack(side=tk.BOTTOM, fill=tk.X)
-        self.editor.config(xscrollcommand=x_scroll.set)
+        # Console output frame
+        console_frame = tk.Frame(main_frame)
+        console_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        # Output frame
-        self.output_frame = tk.Frame(root)
-        self.output_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        tk.Label(console_frame, text="Output", font=("Arial", 14, "bold")).pack(anchor="nw")
 
         self.output = tk.Text(
-            self.output_frame, height=10, state="disabled", bg="black", fg="white", font=("Courier", 12)
+            console_frame,
+            state="disabled",
+            bg="white",
+            fg="black",
+            font=("Courier", 12),
+            padx=10,
+            pady=10,
         )
-        self.output.pack(side=tk.BOTTOM, fill=tk.X)
+        self.output.pack(fill=tk.BOTH, expand=True)
 
-        # Menubar
+        # Menu bar
         self.menu = tk.Menu(self.root)
         self.root.config(menu=self.menu)
 
@@ -125,3 +137,10 @@ class HiveScriptIDE:
 
     def exit(self):
         self.root.quit()
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = HiveScriptIDE(root)
+    root.geometry("1200x600")  # Adjusted window size
+    root.mainloop()
