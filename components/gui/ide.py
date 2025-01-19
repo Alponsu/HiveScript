@@ -60,14 +60,12 @@ class HiveScriptIDE:
         file_menu = tk.Menu(self.menu, tearoff=0)
         file_menu.add_command(label="Open", command=self.open_file)
         file_menu.add_command(label="Save", command=self.save_file)
-        file_menu.add_command(label="Save As", command=self.save_file_as)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.exit)
         self.menu.add_cascade(label="File", menu=file_menu)
 
         # Run menu
         run_menu = tk.Menu(self.menu, tearoff=0)
-        run_menu.add_command(label="Run Code", command=self.run_code)
         run_menu.add_command(label="Lexical Analysis", command=self.lexical_analysis)
         run_menu.add_command(label="Syntax Analysis", command=self.syntax_analysis)
         self.menu.add_cascade(label="Run", menu=run_menu)

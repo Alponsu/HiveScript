@@ -1,4 +1,3 @@
-import subprocess
 import tkinter as tk
 from tkinter import messagebox
 
@@ -21,9 +20,3 @@ class OutputHandler:
         with open("temp_script.py", "w") as temp_file:
             temp_file.write(code)
 
-        try:
-            result = subprocess.run(["python", "temp_script.py"], capture_output=True, text=True)
-            output = result.stdout if result.returncode == 0 else result.stderr
-            OutputHandler.display_output(output_widget, output)
-        except Exception as e:
-            messagebox.showerror("Error", str(e))

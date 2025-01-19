@@ -6,3 +6,4 @@ if __name__ == "__main__":
     ide = HiveScriptIDE(root)
     root.geometry("800x600")
     root.mainloop()
+

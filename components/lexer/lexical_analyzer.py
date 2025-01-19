@@ -37,7 +37,7 @@ class LexicalAnalyzer:
                 start = i
                 while i < length and code[i] != "\n":
                     i += 1
-                tokens.append(f"COMMENT: {code[start:i]}")  # Token for single-line comment
+                tokens.append(f"COMMENT: {code[start:i]}")
                 continue
 
             # Multi-line comments
@@ -46,8 +46,8 @@ class LexicalAnalyzer:
                 i += 2
                 while i < length and code[i:i + 2] != self.comment_end_multi:
                     i += 1
-                i += 2  # Skip closing */
-                tokens.append(f"COMMENT: {code[start:i]}")  # Token for multi-line comment
+                i += 2
+                tokens.append(f"COMMENT: {code[start:i]}")
                 continue
 
             # Identifiers and Keywords
@@ -86,49 +86,46 @@ class LexicalAnalyzer:
                 i += 1
                 while i < length and code[i] != quote:
                     i += 1
-                i += 1  # Skip closing quote
+                i += 1
                 tokens.append(f"STRING: {code[start:i]}")
                 continue
 
-            # Check for two-character operators first (+=, -=, *=, /=, etc.)
-            if i + 1 < length:
-                two_char_operator = code[i:i + 2]
-                if two_char_operator in self.arithmetic_operators.union(self.assignment_operators,
-                                                                        self.unary_operators):
-                    tokens.append(f"OPERATOR: {two_char_operator}")
-                    i += 2
-                    continue
+            # Check for relational operators
+            if i + 1 < length and code[i:i + 2] in self.relational_operators:
+                tokens.append(f"RELATIONAL_OPERATOR: {code[i:i + 2]}")
+                i += 2
+                continue
+            elif char in {"<", ">", "!"}:
+                tokens.append(f"RELATIONAL_OPERATOR: {char}")
+                i += 1
+                continue
 
-            # Then check for single-character operators (like +, -, *, /)
-            if char in self.arithmetic_operators or char in self.unary_operators:
+            # Check for assignment operators
+            if i + 1 < length and code[i:i + 2] in self.assignment_operators:
+                tokens.append(f"ASSIGNMENT_OPERATOR: {code[i:i + 2]}")
+                i += 2
+                continue
+            elif char == "=":
+                tokens.append(f"ASSIGNMENT_OPERATOR: {char}")
+                i += 1
+                continue
+
+            # Check for two-character operators like +=, -=, etc.
+            if i + 1 < length and code[i:i + 2] in self.arithmetic_operators.union(self.assignment_operators):
+                tokens.append(f"OPERATOR: {code[i:i + 2]}")
+                i += 2
+                continue
+
+            # Single-character operators
+            if char in self.arithmetic_operators:
                 tokens.append(f"OPERATOR: {char}")
                 i += 1
                 continue
 
-            # Check for boolean operators
-            if code[i:i + 2] in self.boolean_operators:
+            # Boolean operators
+            if i + 1 < length and code[i:i + 2] in self.boolean_operators:
                 tokens.append(f"BOOLEAN_OPERATOR: {code[i:i + 2]}")
                 i += 2
-                continue
-
-            # Check for relational operators
-            if code[i:i + 2] in self.relational_operators or char in self.relational_operators:
-                start = i
-                if i + 1 < length and code[i:i + 2] in self.relational_operators:
-                    i += 2
-                else:
-                    i += 1
-                tokens.append(f"RELATIONAL_OPERATOR: {code[start:i]}")
-                continue
-
-            # Check for assignment operators
-            if char in self.assignment_operators or code[i:i + 2] in self.assignment_operators:
-                start = i
-                if i + 1 < length and code[i:i + 2] in self.assignment_operators:
-                    i += 2
-                else:
-                    i += 1
-                tokens.append(f"ASSIGNMENT_OPERATOR: {code[start:i]}")
                 continue
 
             # Delimiters
@@ -137,15 +134,14 @@ class LexicalAnalyzer:
                 i += 1
                 continue
 
-            if char in self.dot_operator:
+            # Dot operator
+            if char == self.dot_operator:
                 tokens.append(f"DOT_OPERATOR: {char}")
                 i += 1
                 continue
 
             # Unknown Characters
-            tokens.append(f"UNKNOWN: {char}")
+            tokens.append(f"INVALID TOKEN: {char}")
             i += 1
 
         return tokens
-
-
