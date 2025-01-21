@@ -1,8 +1,8 @@
 from tkinter import filedialog
 import tkinter as tk
 from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 class FileOperations:
     @staticmethod
@@ -37,19 +37,29 @@ class FileOperations:
             file_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF Files", "*.pdf")])
 
         if file_path:
-            c = canvas.Canvas(file_path, pagesize=letter)
-            width, height = letter
-            y_position = height - 40  # Start from the top of the page
-            c.setFont("Helvetica", 10)
+            # Create the PDF document
+            pdf = SimpleDocTemplate(file_path, pagesize=letter)
+            elements = []
 
-            # Write the tokens to the PDF
+            # Prepare table data
+            table_data = [["Lexeme", "Token"]]  # Header row
             for token in tokens:
-                if y_position <= 40:  # Check if space is running out
-                    c.showPage()  # Create a new page
-                    c.setFont("Helvetica", 10)
-                    y_position = height - 40  # Reset position to top of new page
-                c.drawString(40, y_position, token)
-                y_position -= 12  # Move down for the next line
+                lexeme, token_type = token.split(maxsplit=1)
+                table_data.append([lexeme, token_type])
 
-            c.save()
+            # Create the table
+            table = Table(table_data, colWidths=[200, 200])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ]))
+
+            elements.append(table)
+
+            pdf.build(elements)
             return file_path

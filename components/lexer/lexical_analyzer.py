@@ -80,6 +80,14 @@ class LexicalAnalyzer:
             "{": "DEL_LCURLY",
             "}": "DEL_RCURLY"
         }
+        self.format_specifiers = {
+            "%d": "FORMSPECIF_DEC",
+            "%f": "FORMSPECIF_FLO",
+            "lf": "FORMSPECIF_DOU",
+            "%s": "FORMSPECIF_STR",
+            "%c": "FORMSPECIF_CHAR",
+            "%p": "FORMSPECIF_PTR"
+        }
         self.special_characters = {"'", '"'}
         self.comments = {"single": "//", "multi_start": "/*", "multi_end": "*/"}
         self.dot_operator = "."
@@ -100,16 +108,19 @@ class LexicalAnalyzer:
                 case _ if code.startswith(self.comments["single"], i):
                     start = i
                     i = code.find("\n", i)
-                    if i == -1: i = length
-                    tokens.append(f"COMMENT: {code[start:i]}")
+                    if i == -1:
+                        i = length
+                    tokens.append((code[start:i], "COMMENT"))
 
                 # Multi-line comments
                 case _ if code.startswith(self.comments["multi_start"], i):
                     start = i
                     i = code.find(self.comments["multi_end"], i + 2)
-                    if i == -1: i = length
-                    else: i += 2
-                    tokens.append(f"COMMENT: {code[start:i]}")
+                    if i == -1:
+                        i = length
+                    else:
+                        i += 2
+                    tokens.append((code[start:i], "COMMENT"))
 
                 # Identifiers and Keywords
                 case _ if char.isalpha() or char == "_":
@@ -118,30 +129,42 @@ class LexicalAnalyzer:
                         i += 1
                     value = code[start:i]
                     if value in self.keywords:
-                        tokens.append(f"{self.keywords[value]} {value}")
+                        tokens.append((value, self.keywords[value]))
                     elif value in self.reserved_words:
-                        tokens.append(f"{self.reserved_words[value]} {value}")
+                        tokens.append((value, self.reserved_words[value]))
                     else:
-                        tokens.append(f"IDENTIFIER: {value}")
+                        tokens.append((value, "IDENTIFIER"))
 
                 # Numbers (Integer and Floating Point)
                 case _ if char.isdigit() or (char == "." and i + 1 < length and code[i + 1].isdigit()):
                     start = i
                     is_float = False
                     while i < length and (code[i].isdigit() or code[i] == "."):
-                        if code[i] == ".": is_float = True
+                        if code[i] == ".":
+                            is_float = True
                         i += 1
-                    tokens.append(f"{'FLOAT:' if is_float else 'INTEGER:'} {code[start:i]}")
+                    tokens.append((code[start:i], "FLO_LITERAL" if is_float else "INT_LITERAL"))
 
-                # String Literals
+                # String Literals with Embedded Format Specifiers
                 case _ if char in self.special_characters:
                     quote = char
-                    start = i
+                    tokens.append((quote, "SINGLE_QUO" if quote == '\'' else "DOUBLE_QUO"))  # Opening quote
                     i += 1
+                    start = i
                     while i < length and code[i] != quote:
-                        i += 1
-                    i += 1  # Include closing quote
-                    tokens.append(f"STRING: {code[start:i]}")
+                        # Check for format specifiers
+                        if code[i:i + 2] in self.format_specifiers:
+                            if start < i:
+                                tokens.append((code[start:i], "STRING_LIT"))  # Add string literal before %
+                            tokens.append((code[i:i + 2], self.format_specifiers[code[i:i + 2]]))  # Format specifier
+                            i += 2
+                            start = i
+                        else:
+                            i += 1
+                    if start < i:
+                        tokens.append((code[start:i], "STRING_LIT"))  # Remaining string literal
+                    tokens.append((quote, "SINGLE_QUO" if quote == '\'' else "DOUBLE_QUO"))  # Closing quote
+                    i += 1  # Move past the closing quote
 
                 # Operators and Delimiters
                 case _:
@@ -149,19 +172,28 @@ class LexicalAnalyzer:
                     for op_type, op_set in self.operators.items():
                         if code.startswith(tuple(op_set), i):
                             match = max((op for op in op_set if code.startswith(op, i)), key=len)
-                            tokens.append(f"{op_set[match]} {match}")
+                            tokens.append((match, op_set[match]))
                             i += len(match)
                             matched = True
                             break
                     if not matched:
                         if char in self.delimiters:
-                            tokens.append(f"{self.delimiters[char]} {char}")
+                            tokens.append((char, self.delimiters[char]))
                             i += 1
                         elif char == self.dot_operator:
-                            tokens.append(f"DOT_OPERATOR: {char}")
+                            tokens.append((char, "DOT_OPERATOR"))
                             i += 1
                         else:
-                            tokens.append(f"INVALID TOKEN: {char}")
+                            tokens.append((char, "INVALID_TOKEN"))
                             i += 1
 
-        return tokens
+        # Format tokens for aligned output
+        max_lexeme_length = max(len(lexeme) for lexeme, _ in tokens)
+        formatted_tokens = [
+            f"{lexeme.ljust(max_lexeme_length)} {token}" for lexeme, token in tokens
+        ]
+
+        return formatted_tokens
+
+
+
