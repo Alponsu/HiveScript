@@ -1,199 +1,114 @@
+import re
+
 class LexicalAnalyzer:
     def __init__(self):
-        self.keywords = {
-            "int": "INTEGER_KEYWORD",
-            "float": "FLOAT_KEYWORD",
-            "double": "DOUBLE_KEYWORD",
-            "bool": "BOOL_KEYWORD",
-            "char": "CHAR_KEYWORD",
-            "string": "STRING_KEYWORD",
-            "if": "IF_KEYWORD",
-            "else": "ELSE_KEYWORD",
-            "elif": "ELIF_KEYWORD",
-            "for": "FOR_KEYWORD",
-            "while": "WHILE_KEYWORD",
-            "do": "DO_KEYWORD",
-            "skip": "SKIP_KEYWORD",
-            "stop": "STOP_KEYWORD",
-            "return": "RETURN_KEYWORD",
-            "import": "IMPORT_KEYWORD",
-            "from": "FROM_KEYWORD",
-            "print": "PRINT_KEYWORD",
-            "scan": "SCAN_KEYWORD",
-            "struct": "STRUCT_KEYWORD",
-            "ptr": "PTR_KEYWORD",
-            "address": "ADDRESS_KEYWORD",
-            "deref": "DEREF_KEYWORD",
-            "allocate": "ALLOCATE_KEYWORD",
-            "free": "FREE_KEYWORD",
-            "val": "VAL_KEYWORD",
-            "main": "MAIN_KEYWORD"
-        }
-        self.reserved_words = {
-            "True": "TRUE_RESERVED",
-            "False": "FALSE_RESERVED",
-            "None": "NONE_RESERVED"
-        }
-        self.operators = {
-            "arithmetic": {
-                "+": "ARITHMETIC_PLUS",
-                "-": "ARITHMETIC_MINUS",
-                "*": "ARITHMETIC_MULTIPLY",
-                "/": "ARITHMETIC_DIVIDE",
-                "%": "ARITHMETIC_MODULUS"
-            },
-            "boolean": {
-                "&&": "BOOLEAN_AND",
-                "||": "BOOLEAN_OR",
-                "!": "BOOLEAN_NOT"
-            },
-            "relational": {
-                "==": "RELATIONAL_EQUALS",
-                "!=": "RELATIONAL_NOT_EQUALS",
-                "<": "RELATIONAL_LESS_THAN",
-                ">": "RELATIONAL_GREATER_THAN",
-                "<=": "RELATIONAL_LESS_EQUAL",
-                ">=": "RELATIONAL_GREATER_EQUAL"
-            },
-            "assignment": {
-                "=": "ASSIGNMENT",
-                "+=": "ASSIGNMENT_ADD",
-                "-=": "ASSIGNMENT_SUBTRACT",
-                "*=": "ASSIGNMENT_MULTIPLY",
-                "/=": "ASSIGNMENT_DIVIDE",
-                "%=": "ASSIGNMENT_MODULUS"
-            },
-            "unary": {
-                "+": "UNARY_PLUS",
-                "-": "UNARY_MINUS",
-                "++": "UNARY_INCREMENT",
-                "--": "UNARY_DECREMENT"
-            }
-        }
-        self.delimiters = {
-            ";": "DEL_SEMICOLON",
-            ",": "DEL_COMMA",
-            "(": "DEL_LPAREN",
-            ")": "DEL_RPAREN",
-            "[": "DEL_LBRACK",
-            "]": "DEL_RBRACK",
-            "{": "DEL_LCURLY",
-            "}": "DEL_RCURLY"
-        }
-        self.format_specifiers = {
-            "%d": "FORMSPECIF_DEC",
-            "%f": "FORMSPECIF_FLO",
-            "lf": "FORMSPECIF_DOU",
-            "%s": "FORMSPECIF_STR",
-            "%c": "FORMSPECIF_CHAR",
-            "%p": "FORMSPECIF_PTR"
-        }
-        self.special_characters = {"'", '"'}
-        self.comments = {"single": "//", "multi_start": "/*", "multi_end": "*/"}
-        self.dot_operator = "."
+        self.patterns = [
+            (r'//.*', 'COMMENT'),
+            (r'/\*.*?\*/', 'COMMENT'),
+
+            (r'%d', 'FORMSPECIF_DEC'),
+            (r'%f', 'FORMSPECIF_FLO'),
+            (r'%lf', 'FORMSPECIF_DOU'),
+            (r'%s', 'FORMSPECIF_STR'),
+            (r'%c', 'FORMSPECIF_CHAR'),
+            (r'%p', 'FORMSPECIF_PTR'),
+
+            (r'<=', 'RELATIONAL_LESS_EQUAL'),
+            (r'>=', 'RELATIONAL_GREATER_EQUAL'),
+            (r'==', 'RELATIONAL_EQUALS'),
+            (r'!=', 'RELATIONAL_NOT_EQUALS'),
+            (r'\+\+', 'UNARY_INCREMENT'),
+            (r'--', 'UNARY_DECREMENT'),
+            (r'\+=', 'ASSIGNMENT_ADD'),
+            (r'-=', 'ASSIGNMENT_SUBTRACT'),
+            (r'\*=', 'ASSIGNMENT_MULTIPLY'),
+            (r'/=', 'ASSIGNMENT_DIVIDE'),
+            (r'%=', 'ASSIGNMENT_MODULUS'),
+            (r'&&', 'BOOLEAN_AND'),
+            (r'\|\|', 'BOOLEAN_OR'),
+
+            (r'<', 'RELATIONAL_LESS_THAN'),
+            (r'>', 'RELATIONAL_GREATER_THAN'),
+            (r'=', 'ASSIGNMENT'),
+            (r'\+', 'ARITHMETIC_PLUS'),
+            (r'-', 'ARITHMETIC_MINUS'),
+            (r'\*', 'ARITHMETIC_MULTIPLY'),
+            (r'/', 'ARITHMETIC_DIVIDE'),
+            (r'%', 'ARITHMETIC_MODULUS'),
+            (r'!', 'BOOLEAN_NOT'),
+
+            (r'\b(int|float|double|bool|char|string|if|else|elif|for|while|do|skip|stop|return|import|from|print|scan|struct|ptr|address|deref|allocate|free|val|main)\b', 'KEYWORD'),
+
+            (r'\b(True|False|None)\b', 'RESERVED'),
+
+            (r'[a-zA-Z_][a-zA-Z0-9_]*', 'IDENTIFIER'),
+
+            (r'\d+\.\d+', 'FLO_LITERAL'),
+            (r'\d+', 'INT_LITERAL'),
+
+            (r'"[^"]*"', 'STRING_LIT'),
+            (r"'[^']*'", 'STRING_LIT'),
+
+            (r';', 'DEL_SEMICOLON'),
+            (r',', 'DEL_COMMA'),
+            (r'\(', 'DEL_LPAREN'),
+            (r'\)', 'DEL_RPAREN'),
+            (r'\[', 'DEL_LBRACK'),
+            (r'\]', 'DEL_RBRACK'),
+            (r'\{', 'DEL_LCURLY'),
+            (r'\}', 'DEL_RCURLY'),
+
+            (r'\.', 'DOT_OPERATOR'),
+
+            (r'\s+', None),
+
+            (r'.', 'INVALID_TOKEN')
+        ]
+
+        self.regex_patterns = [(re.compile(pattern, re.DOTALL), token_type) for pattern, token_type in self.patterns]
 
     def tokenize(self, code):
         tokens = []
-        i, length = 0, len(code)
+        position = 0
 
-        while i < length:
-            char = code[i]
-
-            match char:
-                # Skip whitespace
-                case _ if char.isspace():
-                    i += 1
-
-                # Single-line comments
-                case _ if code.startswith(self.comments["single"], i):
-                    start = i
-                    i = code.find("\n", i)
-                    if i == -1:
-                        i = length
-                    tokens.append((code[start:i], "COMMENT"))
-
-                # Multi-line comments
-                case _ if code.startswith(self.comments["multi_start"], i):
-                    start = i
-                    i = code.find(self.comments["multi_end"], i + 2)
-                    if i == -1:
-                        i = length
-                    else:
-                        i += 2
-                    tokens.append((code[start:i], "COMMENT"))
-
-                # Identifiers and Keywords
-                case _ if char.isalpha() or char == "_":
-                    start = i
-                    while i < length and (code[i].isalnum() or code[i] == "_"):
-                        i += 1
-                    value = code[start:i]
-                    if value in self.keywords:
-                        tokens.append((value, self.keywords[value]))
-                    elif value in self.reserved_words:
-                        tokens.append((value, self.reserved_words[value]))
-                    else:
-                        tokens.append((value, "IDENTIFIER"))
-
-                # Numbers (Integer and Floating Point)
-                case _ if char.isdigit() or (char == "." and i + 1 < length and code[i + 1].isdigit()):
-                    start = i
-                    is_float = False
-                    while i < length and (code[i].isdigit() or code[i] == "."):
-                        if code[i] == ".":
-                            is_float = True
-                        i += 1
-                    tokens.append((code[start:i], "FLO_LITERAL" if is_float else "INT_LITERAL"))
-
-                # String Literals with Embedded Format Specifiers
-                case _ if char in self.special_characters:
-                    quote = char
-                    tokens.append((quote, "SINGLE_QUO" if quote == '\'' else "DOUBLE_QUO"))  # Opening quote
-                    i += 1
-                    start = i
-                    while i < length and code[i] != quote:
-                        # Check for format specifiers
-                        if code[i:i + 2] in self.format_specifiers:
-                            if start < i:
-                                tokens.append((code[start:i], "STRING_LIT"))  # Add string literal before %
-                            tokens.append((code[i:i + 2], self.format_specifiers[code[i:i + 2]]))  # Format specifier
-                            i += 2
-                            start = i
+        while position < len(code):
+            matched = False
+            for regex, token_type in self.regex_patterns:
+                match = regex.match(code, position)
+                if match:
+                    lexeme = match.group(0)
+                    if token_type:  # Skip whitespace
+                        # Handle string literals separately
+                        if token_type == 'STRING_LIT':
+                            tokens.extend(self.tokenize_string_content(lexeme))
                         else:
-                            i += 1
-                    if start < i:
-                        tokens.append((code[start:i], "STRING_LIT"))  # Remaining string literal
-                    tokens.append((quote, "SINGLE_QUO" if quote == '\'' else "DOUBLE_QUO"))  # Closing quote
-                    i += 1  # Move past the closing quote
+                            tokens.append((lexeme, token_type))
+                    position = match.end()
+                    matched = True
+                    break
 
-                # Operators and Delimiters
-                case _:
-                    matched = False
-                    for op_type, op_set in self.operators.items():
-                        if code.startswith(tuple(op_set), i):
-                            match = max((op for op in op_set if code.startswith(op, i)), key=len)
-                            tokens.append((match, op_set[match]))
-                            i += len(match)
-                            matched = True
-                            break
-                    if not matched:
-                        if char in self.delimiters:
-                            tokens.append((char, self.delimiters[char]))
-                            i += 1
-                        elif char == self.dot_operator:
-                            tokens.append((char, "DOT_OPERATOR"))
-                            i += 1
-                        else:
-                            tokens.append((char, "INVALID_TOKEN"))
-                            i += 1
+            if not matched:
+                raise ValueError(f"Unexpected character at position {position}: {code[position]}")
 
-        # Format tokens for aligned output
-        max_lexeme_length = max(len(lexeme) for lexeme, _ in tokens)
-        formatted_tokens = [
-            f"{lexeme.ljust(max_lexeme_length)} {token}" for lexeme, token in tokens
-        ]
+        return tokens
 
-        return formatted_tokens
+    def tokenize_string_content(self, string_literal):
+        tokens = []
+        content = string_literal[1:-1]  # Remove the quotes
+        i = 0
+        while i < len(content):
+            if content[i] == '%' and i + 1 < len(content):
+                specifier = content[i:i+2]
+                if specifier in {'%d', '%f', '%lf', '%s', '%c', '%p'}:
+                    if i > 0:
+                        tokens.append((content[:i], 'STRING_LIT'))
+                    tokens.append((specifier, f'FORMSPECIF_{specifier[1:].upper()}'))
+                    content = content[i+2:]  # Remove processed part
+                    i = 0
+                    continue
+            i += 1
 
+        if content:
+            tokens.append((content, 'STRING_LIT'))
 
-
+        return tokens
