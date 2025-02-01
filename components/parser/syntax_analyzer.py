@@ -3,6 +3,7 @@ class SyntaxAnalyzer:
         self.tokens = tokens
         self.current_token_index = 0
         self.current_token = self.tokens[self.current_token_index] if self.tokens else None
+        self.errors = []  # Store syntax errors
 
     def advance(self):
         """Move to the next token."""
@@ -19,148 +20,126 @@ class SyntaxAnalyzer:
         return None
 
     def match(self, expected_type):
-        """Match the current token with an expected type."""
+        """Match the current token with an expected type and advance."""
         if not self.current_token:
-            raise SyntaxError("Unexpected end of input")
+            self.errors.append(f"Syntax Error: Unexpected end of input, expected {expected_type}")
+            return False
 
         if self.current_token[1] == expected_type:
             self.advance()
             return True
-        raise SyntaxError(f"Expected {expected_type}, got {self.current_token}")
+        else:
+            self.errors.append(f"Syntax Error: Expected {expected_type}, got {self.current_token}")
+            return False
 
     def parse(self):
-        """Parse the entire input."""
-        while self.current_token:
+        """Parse the entire input, ensuring the main function exists."""
+        self.errors.clear()  # Reset errors before parsing
+
+        if self.current_token and self.current_token[1] == "INTEGER_KEYWORD":
+            self.parse_main_function()
+        else:
+            self.errors.append("Syntax Error: Program must start with 'int main'")
+
+    def parse_main_function(self):
+        """Parse the main function."""
+        self.match("INTEGER_KEYWORD")  # int
+        self.match("MAIN_KEYWORD")     # main
+        self.match("DEL_LCURLY")       # {
+
+        # Parse statements inside the main function
+        while self.current_token and self.current_token[1] != "DEL_RCURLY":
             self.statement()
 
+        self.match("DEL_RCURLY")       # }
+
+    def assignment_statement(self):
+        """Parse assignment statements, including unary operations."""
+        self.match("IDENTIFIER")
+
+        # Handle `i++` or `i--`
+        if self.current_token and self.current_token[1] in ["UNARY_INCREMENT", "UNARY_DECREMENT"]:
+            self.match(self.current_token[1])
+        else:
+            self.match("ASSIGNMENT")
+            self.expression()
+
+        self.match("DEL_SEMICOLON")
+
     def statement(self):
-        """Identify and parse different statements."""
+        """Identify and parse different statements, including loops."""
         try:
-            if self.current_token[1] in ["INT", "FLOAT", "DOUBLE", "STRING", "BOOL"]:
+            if self.current_token[1] in [
+                "INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD", "STRING_KEYWORD", "BOOL_KEYWORD", "CHAR_KEYWORD"
+            ]:
                 self.declaration_statement()
             elif self.current_token[1] == "IDENTIFIER":
-                # Check if it's a function call or assignment
                 if self.peek() and self.peek()[1] == "DEL_LPAREN":
                     self.function_call_statement()
                 else:
                     self.assignment_statement()
-            elif self.current_token[1] == "IF_KEYWORD":
-                self.conditional_statement()
             elif self.current_token[1] in ["FOR_KEYWORD", "WHILE_KEYWORD", "DO_KEYWORD"]:
                 self.loop_statement()
             elif self.current_token[1] == "RETURN_KEYWORD":
                 self.return_statement()
             else:
-                raise SyntaxError(f"Unexpected token: {self.current_token}")
-        except SyntaxError as e:
-            print(f"Syntax Error: {e}")
-            # Skip to next statement to continue parsing
-            while self.current_token and self.current_token[1] != "DEL_SEMICOLON":
-                self.advance()
-            if self.current_token:
-                self.advance()
-
-    def declaration_statement(self):
-        """Parse variable declarations with optional initialization."""
-        # Match data type
-        data_type = self.current_token[1]
-        self.match(data_type)
-
-        # Handle multiple variable declarations
-        while True:
-            # Match variable name
-            self.match("IDENTIFIER")
-
-            # Optional initialization
-            if self.current_token and self.current_token[1] == "ASSIGNMENT":
-                self.match("ASSIGNMENT")
-                self.expression()
-
-            # Check for multiple declarations or end of statement
-            if not self.current_token or self.current_token[1] != "DEL_COMMA":
-                break
-            self.match("DEL_COMMA")
-
-        # Match terminating semicolon
-        self.match("DEL_SEMICOLON")
-
-    def assignment_statement(self):
-        """Parse assignment statements with complex expressions."""
-        self.match("IDENTIFIER")
-        self.match("ASSIGNMENT")
-        self.expression()
-        self.match("DEL_SEMICOLON")
-
-    def function_call_statement(self):
-        """Parse function call statements."""
-        self.match("IDENTIFIER")
-        self.match("DEL_LPAREN")
-
-        # Handle optional arguments
-        if self.current_token and self.current_token[1] != "DEL_RPAREN":
-            while True:
-                self.expression()
-                if not self.current_token or self.current_token[1] != "DEL_COMMA":
-                    break
-                self.match("DEL_COMMA")
-
-        self.match("DEL_RPAREN")
-        self.match("DEL_SEMICOLON")
-
-    def conditional_statement(self):
-        """Parse if-else conditions with optional else clause."""
-        self.match("IF_KEYWORD")
-        self.match("DEL_LPAREN")
-        self.expression()
-        self.match("DEL_RPAREN")
-        self.match("DEL_LCURLY")
-
-        # Parse if block statements
-        while self.current_token and self.current_token[1] != "DEL_RCURLY":
-            self.statement()
-        self.match("DEL_RCURLY")
-
-        # Optional else clause
-        if self.current_token and self.current_token[1] == "ELSE_KEYWORD":
-            self.match("ELSE_KEYWORD")
-            self.match("DEL_LCURLY")
-            while self.current_token and self.current_token[1] != "DEL_RCURLY":
-                self.statement()
-            self.match("DEL_RCURLY")
+                self.errors.append(f"Syntax Error: Unexpected token {self.current_token}")
+                self.skip_to_next_statement()
+        except Exception as e:
+            self.errors.append(f"Syntax Error: {str(e)}")
+            self.skip_to_next_statement()
 
     def loop_statement(self):
-        """Parse various loop constructs with more robust parsing."""
-        keyword = self.current_token[1]
-        self.match(keyword)
+        """Parse for, while, and do-while loops."""
+        loop_type = self.current_token[1]
 
-        if keyword == "FOR_KEYWORD":
+        if loop_type == "FOR_KEYWORD":
+            self.match("FOR_KEYWORD")
             self.match("DEL_LPAREN")
-            # Initialization
-            if self.current_token and self.current_token[1] != "DEL_SEMICOLON":
-                self.declaration_statement()
-            else:
-                self.match("DEL_SEMICOLON")
 
-            # Condition
+            # Initialization (either declaration or assignment)
+            if self.current_token and self.current_token[1] != "DEL_SEMICOLON":
+                if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD"]:
+                    self.declaration_statement()
+                else:
+                    self.assignment_statement()
+            self.match("DEL_SEMICOLON")
+
+            # Condition expression (optional)
             if self.current_token and self.current_token[1] != "DEL_SEMICOLON":
                 self.expression()
             self.match("DEL_SEMICOLON")
 
-            # Increment/Update
+            # Update expression (handles `i++`, `i--`, `i = i + 1`)
             if self.current_token and self.current_token[1] != "DEL_RPAREN":
-                self.expression()
+                if self.current_token[1] == "IDENTIFIER":
+                    self.assignment_statement()
+                else:
+                    self.expression()
             self.match("DEL_RPAREN")
-        else:
-            # While and do-while loops
+
+        elif loop_type == "WHILE_KEYWORD":
+            self.match("WHILE_KEYWORD")
             self.match("DEL_LPAREN")
             self.expression()
             self.match("DEL_RPAREN")
 
-        # Loop body
+        elif loop_type == "DO_KEYWORD":
+            self.match("DO_KEYWORD")
+
+        # Loop body must be enclosed in {}
         self.match("DEL_LCURLY")
         while self.current_token and self.current_token[1] != "DEL_RCURLY":
             self.statement()
         self.match("DEL_RCURLY")
+
+        # For do-while, match `while (condition);`
+        if loop_type == "DO_KEYWORD":
+            self.match("WHILE_KEYWORD")
+            self.match("DEL_LPAREN")
+            self.expression()
+            self.match("DEL_RPAREN")
+            self.match("DEL_SEMICOLON")
 
     def return_statement(self):
         """Parse return statements."""
@@ -169,43 +148,71 @@ class SyntaxAnalyzer:
             self.expression()
         self.match("DEL_SEMICOLON")
 
+    def declaration_statement(self):
+        """Parse variable declarations."""
+        self.match(self.current_token[1])  # Match data type
+        if not self.match("IDENTIFIER"):
+            return
+
+        if self.current_token and self.current_token[1] == "ASSIGNMENT":
+            self.match("ASSIGNMENT")
+            self.expression()
+
+        while self.current_token and self.current_token[1] == "DEL_COMMA":
+            self.match("DEL_COMMA")
+            if not self.match("IDENTIFIER"):
+                return
+
+            if self.current_token and self.current_token[1] == "ASSIGNMENT":
+                self.match("ASSIGNMENT")
+                self.expression()
+
+        self.match("DEL_SEMICOLON")
+
     def expression(self):
-        """
-        Parse complex expressions supporting:
-        - Literals (int, float, string)
-        - Identifiers
-        - Arithmetic operations
-        - Comparison operations
-        - Parenthesized sub-expressions
-        """
+        """Parse expressions including relational and arithmetic operations."""
 
         def parse_primary():
-            if self.current_token[1] in ["IDENTIFIER", "INT_LITERAL", "FLO_LITERAL", "STR_LITERAL"]:
+            """Parse numbers, variables, and parenthesized expressions."""
+            if self.current_token[1] in ["IDENTIFIER", "INT_LITERAL", "FLO_LITERAL", "STRING_LIT"]:
                 self.advance()
             elif self.current_token[1] == "DEL_LPAREN":
                 self.match("DEL_LPAREN")
                 self.expression()
                 self.match("DEL_RPAREN")
             else:
-                raise SyntaxError(f"Unexpected token in expression: {self.current_token}")
+                self.errors.append(f"Syntax Error: Unexpected token in expression {self.current_token}")
 
         def parse_multiplicative():
+            """Handle multiplication and division operations."""
             parse_primary()
-            while self.current_token and self.current_token[1] in ["MUL_OP", "DIV_OP"]:
+            while self.current_token and self.current_token[1] in ["ARITHMETIC_MULTIPLY", "ARITHMETIC_DIVIDE"]:
                 self.advance()
                 parse_primary()
 
         def parse_additive():
+            """Handle addition and subtraction operations."""
             parse_multiplicative()
-            while self.current_token and self.current_token[1] in ["ADD_OP", "SUB_OP"]:
+            while self.current_token and self.current_token[1] in ["ARITHMETIC_PLUS", "ARITHMETIC_MINUS"]:
                 self.advance()
                 parse_multiplicative()
 
         def parse_comparison():
+            """Handle relational comparisons (e.g., <, >, ==, !=)."""
             parse_additive()
-            while self.current_token and self.current_token[1] in ["LT_OP", "GT_OP", "LTE_OP", "GTE_OP", "EQ_OP",
-                                                                   "NEQ_OP"]:
+            while self.current_token and self.current_token[1] in [
+                "RELATIONAL_LESS_THAN", "RELATIONAL_GREATER_THAN",
+                "RELATIONAL_LESS_EQUAL", "RELATIONAL_GREATER_EQUAL",
+                "RELATIONAL_EQUALS", "RELATIONAL_NOT_EQUALS"
+            ]:
                 self.advance()
                 parse_additive()
 
-        parse_comparison()
+        parse_comparison()  # Start parsing the full expression
+
+    def skip_to_next_statement(self):
+        """Skip tokens until a semicolon is found to recover from an error."""
+        while self.current_token and self.current_token[1] != "DEL_SEMICOLON":
+            self.advance()
+        if self.current_token:
+            self.advance()

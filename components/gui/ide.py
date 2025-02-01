@@ -122,20 +122,19 @@ class HiveScriptIDE:
         tokens = self.lexical_analyzer.tokenize(code)
 
         # Pass the tokens to the SyntaxAnalyzer
-        try:
-            self.syntax_analyzer.tokens = tokens  # Set the tokens for syntax analysis
-            self.syntax_analyzer.current_token_index = 0
-            self.syntax_analyzer.current_token = self.syntax_analyzer.tokens[
-                self.syntax_analyzer.current_token_index] if self.syntax_analyzer.tokens else None
+        self.syntax_analyzer.tokens = tokens
+        self.syntax_analyzer.current_token_index = 0
+        self.syntax_analyzer.current_token = self.syntax_analyzer.tokens[
+            self.syntax_analyzer.current_token_index] if self.syntax_analyzer.tokens else None
 
-            # Perform the syntax analysis
-            self.syntax_analyzer.parse()  # This will raise SyntaxError if there's a parsing issue
+        # Perform the syntax analysis
+        self.syntax_analyzer.parse()
 
-            # If successful, display the result in the output
+        # Display results in output panel
+        if self.syntax_analyzer.errors:
+            OutputHandler.display_output(self.output, "Syntax Errors:\n" + "\n".join(self.syntax_analyzer.errors))
+        else:
             OutputHandler.display_output(self.output, "Syntax Analysis: Success")
-        except SyntaxError as e:
-            # Display any syntax errors in the output
-            OutputHandler.display_output(self.output, f"Syntax Error: {str(e)}")
 
     def exit(self):
         self.root.quit()
