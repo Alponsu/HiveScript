@@ -20,16 +20,19 @@ class SyntaxAnalyzer:
         return None
 
     def match(self, expected_type):
-        """Match the current token with an expected type and advance."""
+        """Match the current token with an expected type and report precise line number."""
         if not self.current_token:
-            self.errors.append(f"Syntax Error: Unexpected end of input, expected {expected_type}")
+            self.errors.append(f"Syntax Error (Line Unknown): Unexpected end of input, expected {expected_type}")
             return False
 
-        if self.current_token[1] == expected_type:
+        lexeme, token_type, line = self.current_token
+        if token_type == expected_type:
             self.advance()
             return True
         else:
-            self.errors.append(f"Syntax Error: Expected {expected_type}, got {self.current_token}")
+            self.errors.append(
+                f"Syntax Error (Line {line}): Expected {expected_type} before '{lexeme}' ({token_type})"
+            )
             return False
 
     def parse(self):

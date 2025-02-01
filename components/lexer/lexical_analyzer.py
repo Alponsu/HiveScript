@@ -107,6 +107,7 @@ class LexicalAnalyzer:
     def tokenize(self, code):
         tokens = []
         position = 0
+        line = 1
 
         while position < len(code):
             matched = False
@@ -116,15 +117,18 @@ class LexicalAnalyzer:
                     lexeme = match.group(0)
                     if token_type:
                         if token_type == 'STRING_LIT':
-                            tokens.extend(self.tokenize_string_content(lexeme))
+                            tokens.extend([(tok, typ, line) for tok, typ in self.tokenize_string_content(lexeme)])
                         else:
-                            tokens.append((lexeme, token_type))
+                            tokens.append((lexeme, token_type, line))
                     position = match.end()
                     matched = True
+
+                    # Track line numbers
+                    line += lexeme.count("\n")
                     break
 
             if not matched:
-                tokens.append((code[position], "INVALID_TOKEN"))
+                tokens.append((code[position], "INVALID_TOKEN", line))
                 position += 1
 
         return tokens
