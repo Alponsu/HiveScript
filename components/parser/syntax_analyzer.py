@@ -82,7 +82,7 @@ class SyntaxAnalyzer:
             elif self.current_token[1] == "IDENTIFIER":
                 if self.peek() and self.peek()[1] == "DEL_LPAREN":
                     self.function_call_statement()
-                if self.peek() and self.peek()[1] == "DOT_OPERATOR":
+                elif self.peek() and self.peek()[1] == "DOT_OPERATOR":
                     self.struct_member_assignment()
                 else:
                     self.assignment_statement()
@@ -95,7 +95,12 @@ class SyntaxAnalyzer:
             elif self.current_token[1] in ["PRINT_KEYWORD", "SCAN_KEYWORD"]:
                 self.io_statement()
             elif self.current_token[1] == "STRUCT_KEYWORD":
-                self.struct_statement()
+                # Check if it's a struct definition or a struct variable declaration
+                if self.peek() and self.peek()[1] == "IDENTIFIER" and self.tokens[self.current_token_index + 2][
+                    1] == "DEL_LCURLY":
+                    self.struct_statement()  # Struct definition
+                else:
+                    self.declaration_statement()  # Struct variable declaration
             elif self.current_token[1] == "POINTER_KEYWORD":
                 self.pointer_statement()
             elif self.current_token[1] in ["ALLOCATE_KEYWORD", "FREE_KEYWORD", "ADDRESS_KEYWORD",
@@ -186,11 +191,58 @@ class SyntaxAnalyzer:
         self.match("DEL_SEMICOLON")
 
     def declaration_statement(self):
-        """Parse variable declarations."""
+        """Parse variable declarations, including struct pointers and struct instances."""
+
+        # Check if it's a struct pointer declaration (e.g., `struct ptr[Person] personPtr`)
+        if self.current_token[1] == "STRUCT_KEYWORD":
+            self.match("STRUCT_KEYWORD")  # struct
+            if self.current_token and self.current_token[1] == "POINTER_KEYWORD":
+                self.match("POINTER_KEYWORD")  # ptr
+                self.match("DEL_LBRACK")  # [
+                self.match("IDENTIFIER")  # Struct type (e.g., `Person`)
+                self.match("DEL_RBRACK")  # ]
+                self.match("IDENTIFIER")  # Pointer variable name
+
+                # Optional pointer initialization (e.g., `= allocate();`)
+                if self.current_token and self.current_token[1] == "ASSIGNMENT":
+                    self.match("ASSIGNMENT")
+                    self.match("ALLOCATE_KEYWORD")  # Match `allocate`
+                    self.match("DEL_LPAREN")
+                    if self.current_token and self.current_token[1] in ["INT_LITERAL", "IDENTIFIER"]:
+                        self.match(self.current_token[1])  # Allow allocation with size
+                        if self.current_token and self.current_token[1] == "DEL_COMMA":
+                            self.match("DEL_COMMA")
+                            self.match("INT_LITERAL")  # Contiguous allocation
+                    self.match("DEL_RPAREN")
+
+                self.match("DEL_SEMICOLON")
+                return
+
+        # Check if it's a struct instance declaration (e.g., `struct Person person;`)
+        if self.current_token[1] == "STRUCT_KEYWORD":
+            self.match("STRUCT_KEYWORD")  # struct
+            self.match("IDENTIFIER")  # Struct type (e.g., `Person`)
+            self.match("IDENTIFIER")  # Struct instance name (e.g., `person`)
+
+            # Optional initialization (e.g., `= { "John", 30 };`)
+            if self.current_token and self.current_token[1] == "ASSIGNMENT":
+                self.match("ASSIGNMENT")
+                self.match("DEL_LCURLY")  # {
+                while self.current_token and self.current_token[1] != "DEL_RCURLY":
+                    self.expression()  # Parse initializers
+                    if self.current_token and self.current_token[1] == "DEL_COMMA":
+                        self.match("DEL_COMMA")
+                self.match("DEL_RCURLY")  # }
+
+            self.match("DEL_SEMICOLON")
+            return
+
+        # Normal variable declaration (e.g., `int x = 5;`)
         self.match(self.current_token[1])  # Match data type
         if not self.match("IDENTIFIER"):
             return
 
+        # Variable initialization
         if self.current_token and self.current_token[1] == "ASSIGNMENT":
             self.match("ASSIGNMENT")
             self.expression()
@@ -199,7 +251,6 @@ class SyntaxAnalyzer:
             self.match("DEL_COMMA")
             if not self.match("IDENTIFIER"):
                 return
-
             if self.current_token and self.current_token[1] == "ASSIGNMENT":
                 self.match("ASSIGNMENT")
                 self.expression()
