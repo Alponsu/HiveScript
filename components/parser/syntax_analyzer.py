@@ -73,6 +73,14 @@ class SyntaxAnalyzer:
 
         self.match("DEL_SEMICOLON")
 
+    def unary_increment(self):
+        self.match("IDENTIFIER")
+        if self.current_token and self.current_token[1] in ["UNARY_INCREMENT", "UNARY_DECREMENT"]:
+            self.match(self.current_token[1])
+        else:
+            self.match("ASSIGNMENT")
+            self.expression()
+
     def statement(self):
         """Identify and parse different statements, including memory and struct operations."""
         try:
@@ -139,26 +147,31 @@ class SyntaxAnalyzer:
             self.match("FOR_KEYWORD")
             self.match("DEL_LPAREN")
 
-            # Initialization (either declaration or assignment)
+            # Initialization (declaration or assignment)
             if self.current_token and self.current_token[1] != "DEL_SEMICOLON":
                 if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD"]:
                     self.declaration_statement()
                 else:
                     self.assignment_statement()
-            self.match("DEL_SEMICOLON")
 
-            # Condition expression (optional)
+            # Condition expression
             if self.current_token and self.current_token[1] != "DEL_SEMICOLON":
                 self.expression()
-            self.match("DEL_SEMICOLON")
+            self.match("DEL_SEMICOLON")  # Second semicolon
 
-            # Update expression (handles `i++`, `i--`, `i = i + 1`)
+            # Update expression (e.g., `i++`, `i = i + 1`)
             if self.current_token and self.current_token[1] != "DEL_RPAREN":
                 if self.current_token[1] == "IDENTIFIER":
-                    self.assignment_statement()
+                    self.unary_increment()
                 else:
                     self.expression()
             self.match("DEL_RPAREN")
+
+            # Loop body must be enclosed in `{}`
+            self.match("DEL_LCURLY")
+            while self.current_token and self.current_token[1] != "DEL_RCURLY":
+                self.statement()
+            self.match("DEL_RCURLY")
 
         elif loop_type == "WHILE_KEYWORD":
             self.match("WHILE_KEYWORD")
@@ -166,22 +179,23 @@ class SyntaxAnalyzer:
             self.expression()
             self.match("DEL_RPAREN")
 
+            self.match("DEL_LCURLY")
+            while self.current_token and self.current_token[1] != "DEL_RCURLY":
+                self.statement()
+            self.match("DEL_RCURLY")
+
         elif loop_type == "DO_KEYWORD":
             self.match("DO_KEYWORD")
+            self.match("DEL_LCURLY")
+            while self.current_token and self.current_token[1] != "DEL_RCURLY":
+                self.statement()
+            self.match("DEL_RCURLY")
 
-        # Loop body must be enclosed in {}
-        self.match("DEL_LCURLY")
-        while self.current_token and self.current_token[1] != "DEL_RCURLY":
-            self.statement()
-        self.match("DEL_RCURLY")
-
-        # For do-while, match `while (condition);`
-        if loop_type == "DO_KEYWORD":
             self.match("WHILE_KEYWORD")
             self.match("DEL_LPAREN")
             self.expression()
             self.match("DEL_RPAREN")
-            self.match("DEL_SEMICOLON")
+            self.match("DEL_SEMICOLON")  # Ensure `while(condition);`
 
     def return_statement(self):
         """Parse return statements."""
