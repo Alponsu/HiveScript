@@ -37,7 +37,9 @@ class SyntaxAnalyzer:
 
     def parse(self):
         """Parse the entire input, ensuring the main function exists."""
-        self.errors.clear()  # Reset errors before parsing
+        self.errors.clear()
+        while self.current_token and self.current_token[1] == "STRUCT_KEYWORD":
+            self.struct_statement()
 
         if self.current_token and self.current_token[1] == "INTEGER_KEYWORD":
             self.parse_main_function()
@@ -48,6 +50,8 @@ class SyntaxAnalyzer:
         """Parse the main function."""
         self.match("INTEGER_KEYWORD")  # int
         self.match("MAIN_KEYWORD")     # main
+        self.match("DEL_LPAREN")
+        self.match("DEL_RPAREN")
         self.match("DEL_LCURLY")       # {
 
         # Parse statements inside the main function
@@ -70,27 +74,57 @@ class SyntaxAnalyzer:
         self.match("DEL_SEMICOLON")
 
     def statement(self):
-        """Identify and parse different statements, including loops."""
+        """Identify and parse different statements, including memory and struct operations."""
         try:
-            if self.current_token[1] in [
-                "INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD", "STRING_KEYWORD", "BOOL_KEYWORD", "CHAR_KEYWORD"
-            ]:
+            if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD",
+                                         "STRING_KEYWORD", "BOOL_KEYWORD", "CHAR_KEYWORD"]:
                 self.declaration_statement()
             elif self.current_token[1] == "IDENTIFIER":
                 if self.peek() and self.peek()[1] == "DEL_LPAREN":
                     self.function_call_statement()
+                if self.peek() and self.peek()[1] == "DOT_OPERATOR":
+                    self.struct_member_assignment()
                 else:
                     self.assignment_statement()
+            elif self.current_token[1] in ["IF_KEYWORD", "ELSE_KEYWORD", "ELIF_KEYWORD"]:
+                self.conditional_statement()
             elif self.current_token[1] in ["FOR_KEYWORD", "WHILE_KEYWORD", "DO_KEYWORD"]:
                 self.loop_statement()
             elif self.current_token[1] == "RETURN_KEYWORD":
                 self.return_statement()
+            elif self.current_token[1] in ["PRINT_KEYWORD", "SCAN_KEYWORD"]:
+                self.io_statement()
+            elif self.current_token[1] == "STRUCT_KEYWORD":
+                self.struct_statement()
+            elif self.current_token[1] == "POINTER_KEYWORD":
+                self.pointer_statement()
+            elif self.current_token[1] in ["ALLOCATE_KEYWORD", "FREE_KEYWORD", "ADDRESS_KEYWORD",
+                                           "DEREF_KEYWORD", "VAL_KEYWORD"]:
+                self.memory_management_statement()
             else:
-                self.errors.append(f"Syntax Error: Unexpected token {self.current_token}")
                 self.skip_to_next_statement()
         except Exception as e:
             self.errors.append(f"Syntax Error: {str(e)}")
             self.skip_to_next_statement()
+
+    def conditional_statement(self):
+        """Parse if-else conditions with optional else clause."""
+        self.match("IF_KEYWORD")
+        self.match("DEL_LPAREN")
+        self.expression()
+        self.match("DEL_RPAREN")
+        self.match("DEL_LCURLY")
+
+        while self.current_token and self.current_token[1] != "DEL_RCURLY":
+            self.statement()
+        self.match("DEL_RCURLY")
+
+        if self.current_token and self.current_token[1] == "ELSE_KEYWORD":
+            self.match("ELSE_KEYWORD")
+            self.match("DEL_LCURLY")
+            while self.current_token and self.current_token[1] != "DEL_RCURLY":
+                self.statement()
+            self.match("DEL_RCURLY")
 
     def loop_statement(self):
         """Parse for, while, and do-while loops."""
@@ -172,14 +206,123 @@ class SyntaxAnalyzer:
 
         self.match("DEL_SEMICOLON")
 
+    def io_statement(self):
+        """Parse print and scan statements."""
+        if self.current_token[1] == "PRINT_KEYWORD":
+            self.match("PRINT_KEYWORD")
+            self.match("DEL_LPAREN")
+            self.expression()
+            self.match("DEL_RPAREN")
+            self.match("DEL_SEMICOLON")
+
+        elif self.current_token[1] == "SCAN_KEYWORD":
+            self.match("SCAN_KEYWORD")
+            self.match("DEL_LPAREN")
+            self.expression()
+            self.match("DEL_RPAREN")
+            self.match("DEL_SEMICOLON")
+
+    def pointer_statement(self):
+        """Parse pointer declarations and assignments."""
+        self.match("POINTER_KEYWORD")  # ptr
+        self.match("DEL_LBRACK")  # [
+        self.match(self.current_token[1])  # Data type or struct name
+        self.match("DEL_RBRACK")  # ]
+        self.match("IDENTIFIER")  # Pointer name
+
+        # Pointer initialization
+        if self.current_token and self.current_token[1] == "ASSIGNMENT":
+            self.match("ASSIGNMENT")
+            self.match("ADDRESS_KEYWORD")  # address
+            self.match("DEL_LPAREN")
+            self.match("IDENTIFIER")  # Variable name
+            self.match("DEL_RPAREN")
+
+        self.match("DEL_SEMICOLON")
+
+    def memory_management_statement(self):
+        """Parse memory allocation, deallocation, and pointer operations."""
+        if self.current_token[1] == "ALLOCATE_KEYWORD":
+            self.match("ALLOCATE_KEYWORD")
+            self.match("DEL_LPAREN")
+            if self.current_token and self.current_token[1] in ["INT_LITERAL", "IDENTIFIER"]:
+                self.match(self.current_token[1])  # Allocate with size
+                if self.current_token and self.current_token[1] == "DEL_COMMA":
+                    self.match("DEL_COMMA")
+                    self.match("INT_LITERAL")  # Contiguous allocation
+            self.match("DEL_RPAREN")
+
+        elif self.current_token[1] == "FREE_KEYWORD":
+            self.match("FREE_KEYWORD")
+            self.match("DEL_LPAREN")
+            self.match("IDENTIFIER")  # Pointer variable
+            self.match("DEL_RPAREN")
+
+        elif self.current_token[1] == "DEREF_KEYWORD":
+            self.match("DEREF_KEYWORD")
+            self.match("DEL_LPAREN")
+            self.match("IDENTIFIER")  # Pointer variable
+            self.match("DEL_RPAREN")
+
+        elif self.current_token[1] == "VAL_KEYWORD":
+            self.match("VAL_KEYWORD")
+            self.match("DEL_LPAREN")
+            self.match("IDENTIFIER")  # Pointer variable
+            self.match("DEL_RPAREN")
+
+
+    def struct_statement(self):
+        """Parse struct declarations and assignments."""
+        self.match("STRUCT_KEYWORD")
+        self.match("IDENTIFIER")
+        self.match("DEL_LCURLY")
+
+        while self.current_token and self.current_token[1] != "DEL_RCURLY":
+            self.declaration_statement()
+
+        self.match("DEL_RCURLY")
+        self.match("DEL_SEMICOLON")
+
+    def struct_pointer_statement(self):
+        """Parse struct pointer assignments."""
+        self.match("STRUCT_KEYWORD")
+        self.match("POINTER_KEYWORD")
+        self.match("DEL_LBRACK")
+        self.match("IDENTIFIER")  # Struct name
+        self.match("DEL_RBRACK")
+        self.match("IDENTIFIER")  # Pointer variable
+        self.match("ASSIGNMENT")
+        self.match("ADDRESS_KEYWORD")
+        self.match("DEL_LPAREN")
+        self.match("IDENTIFIER")  # Struct instance
+        self.match("DEL_RPAREN")
+        self.match("DEL_SEMICOLON")
+
+    def struct_member_assignment(self):
+        """Parse struct member assignments using `.val()` notation."""
+        self.match("IDENTIFIER")  # Struct instance
+        self.match("DOT_OPERATOR")  # .
+        self.match("VAL_KEYWORD")
+        self.match("DEL_LPAREN")
+        self.match("IDENTIFIER")  # Struct member
+        self.match("DEL_RPAREN")
+        self.match("ASSIGNMENT")
+        self.expression()
+        self.match("DEL_SEMICOLON")
+
     def expression(self):
-        """Parse expressions including relational and arithmetic operations."""
+        """Parse expressions including function calls, pointer dereferencing, and arithmetic."""
 
         def parse_primary():
-            """Parse numbers, variables, and parenthesized expressions."""
+            """Parse numbers, variables, function calls, and pointer dereferencing."""
             if self.current_token[1] in ["IDENTIFIER", "INT_LITERAL", "FLO_LITERAL", "STRING_LIT"]:
                 self.advance()
-            elif self.current_token[1] == "DEL_LPAREN":
+            elif self.current_token[1] == "DEREF_KEYWORD":  # Handle `deref(num)`
+                self.match("DEREF_KEYWORD")
+                self.match("DEL_LPAREN")
+                self.match("IDENTIFIER")  # Pointer variable being dereferenced
+                self.match("DEL_RPAREN")
+            elif self.current_token[1] == "DEL_LPAREN":  # Handle expressions in parentheses
                 self.match("DEL_LPAREN")
                 self.expression()
                 self.match("DEL_RPAREN")

@@ -94,7 +94,7 @@ class HiveScriptIDE:
             return
 
         tokens = self.lexical_analyzer.tokenize(code)
-        formatted_tokens = [f"{lexeme.ljust(20)} {token}" for lexeme, token in tokens]
+        formatted_tokens = [f"{lexeme.ljust(20)} {token}" for token_data in tokens for lexeme, token in [token_data[:2]]]
         OutputHandler.display_output(self.output, "Lexical Analysis:\n" + "\n".join(formatted_tokens))
 
     def save_lexical_to_pdf(self):
