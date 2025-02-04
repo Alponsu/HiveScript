@@ -6,7 +6,7 @@ class LexicalAnalyzer:
             (r'//.*', 'COMMENT'),
             (r'/\*.*?\*/', 'COMMENT'),
 
-            # Format Specifiers
+            # Format Specifiers (No longer handled separately)
             (r'%d', 'FORMSPECIF_INT'),
             (r'%f', 'FORMSPECIF_FLOAT'),
             (r'%lf', 'FORMSPECIF_DOUBLE'),
@@ -117,7 +117,7 @@ class LexicalAnalyzer:
                     lexeme = match.group(0)
                     if token_type:
                         if token_type == 'STRING_LIT':
-                            tokens.extend([(tok, typ, line) for tok, typ in self.tokenize_string_content(lexeme)])
+                            tokens.append((lexeme, 'STRING_LIT', line))  # No special handling for format specifiers
                         else:
                             tokens.append((lexeme, token_type, line))
                     position = match.end()
@@ -130,27 +130,5 @@ class LexicalAnalyzer:
             if not matched:
                 tokens.append((code[position], "INVALID_TOKEN", line))
                 position += 1
-
-        return tokens
-
-    def tokenize_string_content(self, string_literal):
-        """Tokenize string literals and handle format specifiers."""
-        tokens = []
-        content = string_literal[1:-1]  # Remove quotes
-        i = 0
-        while i < len(content):
-            if content[i] == '%' and i + 1 < len(content):
-                specifier = content[i:i+2]
-                if specifier in {'%d', '%f', '%lf', '%s', '%c', '%p'}:
-                    if i > 0:
-                        tokens.append((content[:i], 'STRING_LIT'))
-                    tokens.append((specifier, f'FORMSPECIF_{specifier[1:].upper()}'))
-                    content = content[i+2:]
-                    i = 0
-                    continue
-            i += 1
-
-        if content:
-            tokens.append((content, 'STRING_LIT'))
 
         return tokens
