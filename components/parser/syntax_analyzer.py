@@ -33,14 +33,19 @@ class SyntaxAnalyzer:
             return False
 
     def parse(self):
+        """Ensures the program starts with `int main()`, otherwise stops parsing immediately."""
         self.errors.clear()
+
+        # Allow struct declarations before main function
         while self.current_token and self.current_token[1] == "STRUCT_KEYWORD":
             self.struct_statement()
 
-        if self.current_token and self.current_token[1] == "INTEGER_KEYWORD":
-            self.parse_main_function()
-        else:
-            self.errors.append("Syntax Error: Program must start with 'int main'")
+        # If main function is missing, report error and stop parsing
+        if not self.current_token or self.current_token[1] != "INTEGER_KEYWORD" or self.peek()[1] != "MAIN_KEYWORD":
+            self.errors.append("Syntax Error: Program must have a main function")
+            return  # **Stop parsing immediately**
+
+        self.parse_main_function()
 
     def parse_main_function(self):
         """Parse the main function."""
@@ -107,6 +112,11 @@ class SyntaxAnalyzer:
             elif self.current_token[1] in ["ALLOCATE_KEYWORD", "FREE_KEYWORD", "ADDRESS_KEYWORD",
                                            "DEREF_KEYWORD", "VAL_KEYWORD"]:
                 self.memory_management_statement()
+            elif self.current_token[1] in ["INT_LITERAL", "FLO_LITERAL", "STRING_LIT", "CHAR_LIT"]:
+                # **New Fix:** Prevent standalone literals from being treated as statements
+                self.errors.append(
+                    f"Syntax Error (Line {self.current_token[2]}): Unexpected literal '{self.current_token[0]}'")
+                self.skip_to_next_statement()
             else:
                 self.skip_to_next_statement()
         except Exception as e:
@@ -125,11 +135,13 @@ class SyntaxAnalyzer:
             self.match("DEL_RBRACK")  # Match ']'
         else:
             # Base type (e.g., int, float, etc.)
-            if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD", "IDENTIFIER"]:
-                self.match(self.current_token[1])
+            if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD", "STRING_KEYWORD",
+                                         "BOOL_KEYWORD", "CHAR_KEYWORD", "IDENTIFIER"]:
+                self.match(self.current_token[1])  # Match base type (e.g., int, string)
             else:
                 self.errors.append(
-                    f"Syntax Error (Line {self.current_token[2]}): Expected base type, found '{self.current_token[0]}'")
+                    f"Syntax Error (Line {self.current_token[2]}): pointer declaration must have a type'")
+
     def conditional_statement(self):
         self.match("IF_KEYWORD")
         self.match("DEL_LPAREN")
@@ -155,19 +167,25 @@ class SyntaxAnalyzer:
             self.match("FOR_KEYWORD")
             self.match("DEL_LPAREN")
 
+            # Initialization part
             if self.current_token and self.current_token[1] != "DEL_SEMICOLON":
                 if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD"]:
                     self.declaration_statement()
                 else:
                     self.assignment_statement()
 
+            # Condition part
             if self.current_token and self.current_token[1] != "DEL_SEMICOLON":
                 self.expression()
             self.match("DEL_SEMICOLON")
 
+            # Increment part
             if self.current_token and self.current_token[1] != "DEL_RPAREN":
                 if self.current_token[1] == "IDENTIFIER":
-                    self.unary_increment()
+                    if self.peek() and self.peek()[1] == "DOT_OPERATOR":
+                        self.struct_member_access()
+                    else:
+                        self.unary_increment()
                 else:
                     self.expression()
             self.match("DEL_RPAREN")
@@ -210,16 +228,23 @@ class SyntaxAnalyzer:
     def pointer_declaration(self):
         if self.current_token[1] == "POINTER_KEYWORD":
             self.pointer_statement()  # Parse pointer declaration
-            self.match("IDENTIFIER")  # Match the variable name
+            self.match("IDENTIFIER")  # Match the pointer variable name
+
             if self.current_token[1] == "ASSIGNMENT":
                 self.match("ASSIGNMENT")
-                self.expression()
+                self.match("ADDRESS_KEYWORD")
+                self.match("DEL_LPAREN")
+                self.match("IDENTIFIER")  # Match the variable being referenced
+                self.match("DEL_RPAREN")
+
+            self.match("DEL_SEMICOLON")  # Ensure semicolon at the end
             return
 
-            # Handle other declarations (e.g., int, float, etc.)
-        self.match(self.current_token[1])  # Match the type keyword
+        # Handle other types (e.g., int, float, etc.)
+        self.match(self.current_token[1])  # Match the base type keyword
         self.match("IDENTIFIER")  # Match the variable name
         self.match("DEL_SEMICOLON")
+
     def declaration_statement(self):
 
         if self.current_token[1] == "STRUCT_KEYWORD":
@@ -261,46 +286,87 @@ class SyntaxAnalyzer:
 
             self.match("DEL_SEMICOLON")
             return
-
+            # Match the type keyword (e.g., int, float, etc.)
         self.match(self.current_token[1])
+
+        # Match the first variable name
         if not self.match("IDENTIFIER"):
             return
 
+        # Check for initialization (`=`)
         if self.current_token and self.current_token[1] == "ASSIGNMENT":
             self.match("ASSIGNMENT")
-            self.expression()
 
+            # **Check if a value exists**
+            if not self.current_token or self.current_token[1] in ["DEL_SEMICOLON", "DEL_COMMA"]:
+                self.errors.append(f"Syntax Error (Line {self.current_token[2]}): Expected a value after '='")
+
+                # **Force token advancement to prevent infinite loops**
+                self.advance()
+                return  # **Don't skip the whole statement, just handle the error**
+
+            self.expression()  # Parse the assigned value
+
+        # Handle multiple variable declarations (e.g., int a, b = 5, c;)
         while self.current_token and self.current_token[1] == "DEL_COMMA":
             self.match("DEL_COMMA")
+
+            # Ensure the next token is an identifier
             if not self.match("IDENTIFIER"):
                 return
+
+            # Check if the variable has an assignment
             if self.current_token and self.current_token[1] == "ASSIGNMENT":
                 self.match("ASSIGNMENT")
-                self.expression()
 
-        self.match("DEL_SEMICOLON")
+                # **Check if a value exists**
+                if not self.current_token or self.current_token[1] in ["DEL_SEMICOLON", "DEL_COMMA"]:
+                    self.errors.append(f"Syntax Error (Line {self.current_token[2]}): Expected a value after '='")
+
+                    # **Force token advancement to prevent infinite loops**
+                    self.advance()
+                    return  # **Don't skip the whole statement, just handle the error**
+
+                self.expression()  # Parse the assigned value
+
+        self.match("DEL_SEMICOLON")  # Ensure semicolon at the end
+
 
     def io_statement(self):
-        """Parse print and scan statements, supporting structured member access and formatted output."""
+        """Parse print and scan statements, ensuring correct format string handling."""
         if self.current_token[1] == "PRINT_KEYWORD":
             self.match("PRINT_KEYWORD")
             self.match("DEL_LPAREN")
 
             if self.current_token and self.current_token[1] == "STRING_LIT":
                 self.match("STRING_LIT")
+
+                # Check if there's an identifier directly following the string literal without a comma
+                if self.current_token and self.current_token[1] == "IDENTIFIER":
+                    self.errors.append(
+                        f"Syntax Error (Line {self.current_token[2]}): Missing ',' before '{self.current_token[0]}'"
+                    )
+                    self.skip_to_next_statement()
+                    return
+
+                # Process additional arguments after the format string
                 while self.current_token and self.current_token[1] == "DEL_COMMA":
                     self.match("DEL_COMMA")
                     if self.current_token and self.current_token[1] == "IDENTIFIER":
                         if self.peek() and self.peek()[1] == "DOT_OPERATOR":
-                            self.struct_member_access()  # Handle struct member access inside print
+                            self.struct_member_access()
                         else:
-                            self.expression()  # Handle normal expressions
+                            self.expression()
                     else:
-                        self.errors.append("Syntax Error: Unexpected token in print statement")
+                        self.errors.append(
+                            f"Syntax Error (Line {self.current_token[2]}): Unexpected token in print statement"
+                        )
                         self.skip_to_next_statement()
                         return
             else:
-                self.errors.append("Syntax Error: Expected format string in print statement")
+                self.errors.append(
+                    f"Syntax Error (Line {self.current_token[2]}): Expected format string in print statement"
+                )
                 self.skip_to_next_statement()
                 return
 
@@ -369,17 +435,78 @@ class SyntaxAnalyzer:
             self.match("IDENTIFIER")
             self.match("DEL_RPAREN")
 
-
     def struct_statement(self):
+        """Parse struct definitions, ensuring members are declared but not initialized."""
         self.match("STRUCT_KEYWORD")
-        self.match("IDENTIFIER")
-        self.match("DEL_LCURLY")
+        self.match("IDENTIFIER")  # Match struct name
+        self.match("DEL_LCURLY")  # Match `{` opening brace
 
         while self.current_token and self.current_token[1] != "DEL_RCURLY":
-            self.declaration_statement()
+            if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD",
+                                         "STRING_KEYWORD", "BOOL_KEYWORD", "CHAR_KEYWORD", "IDENTIFIER"]:
+                # Match base type
+                data_type = self.current_token[0]
+                self.match(self.current_token[1])
 
-        self.match("DEL_RCURLY")
-        self.match("DEL_SEMICOLON")
+                # Match variable name
+                if self.current_token[1] == "IDENTIFIER":
+                    var_name = self.current_token[0]
+                    self.match("IDENTIFIER")
+                else:
+                    self.errors.append(
+                        f"Syntax Error (Line {self.current_token[2]}): Expected identifier for struct member")
+                    self.skip_to_next_statement()
+                    continue
+
+                # Check if initialization (`=`) is attempted, which is **not allowed**
+                if self.current_token and self.current_token[1] == "ASSIGNMENT":
+                    self.errors.append(
+                        f"Syntax Error (Line {self.current_token[2]}): Initialization of '{var_name}' in struct '{data_type}' is not allowed"
+                    )
+                    self.skip_to_next_statement()
+                    continue
+
+                self.match("DEL_SEMICOLON")  # Ensure `;` at end of declaration
+
+            elif self.current_token[1] == "POINTER_KEYWORD":
+                # Match pointer declaration (ptr[type] identifier;)
+                self.match("POINTER_KEYWORD")
+                self.match("DEL_LBRACK")  # Match `[`
+                if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD",
+                                             "STRING_KEYWORD", "BOOL_KEYWORD", "CHAR_KEYWORD", "IDENTIFIER"]:
+                    self.match(self.current_token[1])  # Match base type inside `ptr[type]`
+                else:
+                    self.errors.append(
+                        f"Syntax Error (Line {self.current_token[2]}): Expected base type inside 'ptr[...]'"
+                    )
+                    self.skip_to_next_statement()
+                    continue
+                self.match("DEL_RBRACK")  # Match `]`
+
+                # Match pointer variable name
+                if self.current_token[1] == "IDENTIFIER":
+                    self.match("IDENTIFIER")
+                else:
+                    self.errors.append(f"Syntax Error (Line {self.current_token[2]}): Expected identifier for pointer")
+                    self.skip_to_next_statement()
+                    continue
+
+                # Check for assignment (`=`), which **is not allowed** inside structs
+                if self.current_token and self.current_token[1] == "ASSIGNMENT":
+                    self.errors.append(
+                        f"Syntax Error (Line {self.current_token[2]}): Initialization of pointer inside struct is not allowed"
+                    )
+                    self.skip_to_next_statement()
+                    continue
+
+                self.match("DEL_SEMICOLON")  # Ensure `;` at end of pointer declaration
+
+            else:
+                self.errors.append(f"Syntax Error (Line {self.current_token[2]}): Invalid struct member declaration")
+                self.skip_to_next_statement()
+
+        self.match("DEL_RCURLY")  # Closing `}`
+        self.match("DEL_SEMICOLON")  # Ensure `;` at the end of the struct
 
     def struct_pointer_statement(self):
         """Parse struct pointer assignments."""
@@ -418,8 +545,13 @@ class SyntaxAnalyzer:
 
     def expression(self):
         def parse_primary():
-            if self.current_token[1] in ["IDENTIFIER", "INT_LITERAL", "FLO_LITERAL", "STRING_LIT"]:
-                self.advance()
+            if self.current_token[1] == "STRING_LIT":
+                self.match("STRING_LIT")
+            elif self.current_token[1] in ["IDENTIFIER", "INT_LITERAL", "FLO_LITERAL"]:
+                if self.current_token[1] == "IDENTIFIER" and self.peek() and self.peek()[1] == "DOT_OPERATOR":
+                    self.struct_member_access()
+                else:
+                    self.match(self.current_token[1])
             elif self.current_token[1] == "DEREF_KEYWORD":
                 self.match("DEREF_KEYWORD")
                 self.match("DEL_LPAREN")
@@ -429,23 +561,20 @@ class SyntaxAnalyzer:
                 self.match("DEL_LPAREN")
                 self.expression()
                 self.match("DEL_RPAREN")
-            elif self.current_token[1] == "IDENTIFIER" and self.peek() and self.peek()[1] == "DOT_OPERATOR":
-                self.struct_member_access()  # Handle struct member access
-            elif self.current_token[1] == "SCAN_KEYWORD":  # Handle scan() as an expression
+            elif self.current_token[1] == "SCAN_KEYWORD":
                 self.match("SCAN_KEYWORD")
                 self.match("DEL_LPAREN")
-
                 if self.current_token and self.current_token[1] == "STRING_LIT":
                     self.match("STRING_LIT")
                 else:
-                    error_line = self.current_token[2] if self.current_token else line  # Use last known line if None
-                    self.errors.append(f"Syntax Error (Line {error_line}): Expected format string inside scan()")
+                    self.errors.append(
+                        f"Syntax Error (Line {self.current_token[2]}): Expected format string inside scan()")
                     self.skip_to_next_statement()
                     return
-
-                self.match("DEL_RPAREN")  # Ensure scan() closes correctly
+                self.match("DEL_RPAREN")
             else:
-                self.errors.append(f"Syntax Error: Unexpected token in expression {self.current_token}")
+                self.errors.append(f"Syntax Error (Line {self.current_token[2]}): String is not formatted correctly")
+                self.skip_to_next_statement()
 
         def parse_multiplicative():
             parse_primary()
@@ -472,7 +601,15 @@ class SyntaxAnalyzer:
         parse_comparison()
 
     def skip_to_next_statement(self):
+        """Skip tokens until a semicolon (;) is found, ensuring proper resumption."""
         while self.current_token and self.current_token[1] != "DEL_SEMICOLON":
             self.advance()
-        if self.current_token:
+
+        # **Advance past the semicolon to resume parsing**
+        if self.current_token and self.current_token[1] == "DEL_SEMICOLON":
             self.advance()
+
+        # **Ensure parsing continues if tokens remain**
+        if self.current_token:
+            self.statement()
+
