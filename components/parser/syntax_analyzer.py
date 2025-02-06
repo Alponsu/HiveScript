@@ -72,6 +72,16 @@ class SyntaxAnalyzer:
             self.expression()
 
         self.match("DEL_SEMICOLON")
+    def change_loop(self):
+        self.match("IDENTIFIER")
+
+        # Handle `i++` or `i--`
+        if self.current_token and self.current_token[1] in ["UNARY_INCREMENT", "UNARY_DECREMENT"]:
+            self.match(self.current_token[1])
+        else:
+            self.match("ASSIGNMENT")
+            self.expression()
+
 
     def unary_increment(self):
         self.match("IDENTIFIER")
@@ -145,7 +155,15 @@ class SyntaxAnalyzer:
     def conditional_statement(self):
         self.match("IF_KEYWORD")
         self.match("DEL_LPAREN")
-        self.expression()
+
+        # Ensure only a boolean expression is allowed
+        if self.current_token and self.current_token[1] == "ASSIGNMENT":
+            self.errors.append(
+                f"Syntax Error (Line {self.current_token[2]}): Expected boolean expression in if condition")
+            self.skip_to_next_statement()
+            return
+
+        self.expression()  # Parse the actual condition
         self.match("DEL_RPAREN")
         self.match("DEL_LCURLY")
 
@@ -197,7 +215,7 @@ class SyntaxAnalyzer:
                     if self.peek() and self.peek()[1] in ["UNARY_INCREMENT", "UNARY_DECREMENT"]:
                         self.unary_increment()
                     else:
-                        self.assignment_statement()
+                        self.change_loop()
                 else:
                     self.errors.append(
                         f"Syntax Error (Line {self.current_token[2]}): Expected increment, decrement, or assignment in change statement")
