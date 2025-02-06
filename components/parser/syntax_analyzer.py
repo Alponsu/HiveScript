@@ -161,39 +161,56 @@ class SyntaxAnalyzer:
             self.match("DEL_RCURLY")
 
     def loop_statement(self):
-        loop_type = self.current_token[1]
-
-        if loop_type == "FOR_KEYWORD":
+        if self.current_token[1] == "FOR_KEYWORD":
             self.match("FOR_KEYWORD")
             self.match("DEL_LPAREN")
 
-            # Initialization part
+            # Step 1: Initialization (Must be a variable declaration or assignment)
             if self.current_token and self.current_token[1] != "DEL_SEMICOLON":
                 if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD"]:
                     self.declaration_statement()
-                else:
+                elif self.current_token[1] == "IDENTIFIER":
                     self.assignment_statement()
+                else:
+                    self.errors.append(
+                        f"Syntax Error (Line {self.current_token[2]}): Expected variable initialization")
+                    self.skip_to_next_statement()
+                    return
 
-            # Condition part
-            if self.current_token and self.current_token[1] != "DEL_SEMICOLON":
-                self.expression()
-            self.match("DEL_SEMICOLON")
 
-            # Increment part
+            # Step 2: Condition (Must be a boolean expression)
+            if self.current_token and self.current_token[1] not in [
+                "IDENTIFIER", "INT_LITERAL", "FLO_LITERAL", "RELATIONAL_LESS_THAN",
+                "RELATIONAL_GREATER_THAN", "RELATIONAL_LESS_EQUAL", "RELATIONAL_GREATER_EQUAL",
+                "RELATIONAL_EQUALS", "RELATIONAL_NOT_EQUALS"
+            ]:
+                self.errors.append(
+                    f"Syntax Error (Line {self.current_token[2]}): Expected boolean expression as loop condition")
+                self.skip_to_next_statement()
+                return
+            self.expression()  # Parse condition
+            self.match("DEL_SEMICOLON")  # Match second semicolon
+
+            # Step 3: Change (Must be an increment, decrement, or assignment)
             if self.current_token and self.current_token[1] != "DEL_RPAREN":
                 if self.current_token[1] == "IDENTIFIER":
-                    if self.peek() and self.peek()[1] == "DOT_OPERATOR":
-                        self.struct_member_access()
-                    else:
+                    if self.peek() and self.peek()[1] in ["UNARY_INCREMENT", "UNARY_DECREMENT"]:
                         self.unary_increment()
+                    else:
+                        self.assignment_statement()
                 else:
-                    self.expression()
-            self.match("DEL_RPAREN")
+                    self.errors.append(
+                        f"Syntax Error (Line {self.current_token[2]}): Expected increment, decrement, or assignment in change statement")
+                    self.skip_to_next_statement()
+                    return
+            self.match("DEL_RPAREN")  # Match closing parenthesis
 
+            # Loop body must be enclosed in `{}`
             self.match("DEL_LCURLY")
             while self.current_token and self.current_token[1] != "DEL_RCURLY":
                 self.statement()
             self.match("DEL_RCURLY")
+
 
         elif loop_type == "WHILE_KEYWORD":
             self.match("WHILE_KEYWORD")
@@ -331,44 +348,41 @@ class SyntaxAnalyzer:
 
         self.match("DEL_SEMICOLON")  # Ensure semicolon at the end
 
-
     def io_statement(self):
         """Parse print and scan statements, ensuring correct format string handling."""
         if self.current_token[1] == "PRINT_KEYWORD":
             self.match("PRINT_KEYWORD")
             self.match("DEL_LPAREN")
 
+            # First argument (can be a string or expression)
             if self.current_token and self.current_token[1] == "STRING_LIT":
                 self.match("STRING_LIT")
-
-                # Check if there's an identifier directly following the string literal without a comma
-                if self.current_token and self.current_token[1] == "IDENTIFIER":
-                    self.errors.append(
-                        f"Syntax Error (Line {self.current_token[2]}): Missing ',' before '{self.current_token[0]}'"
-                    )
-                    self.skip_to_next_statement()
-                    return
-
-                # Process additional arguments after the format string
-                while self.current_token and self.current_token[1] == "DEL_COMMA":
-                    self.match("DEL_COMMA")
-                    if self.current_token and self.current_token[1] == "IDENTIFIER":
-                        if self.peek() and self.peek()[1] == "DOT_OPERATOR":
-                            self.struct_member_access()
-                        else:
-                            self.expression()
-                    else:
-                        self.errors.append(
-                            f"Syntax Error (Line {self.current_token[2]}): Unexpected token in print statement"
-                        )
-                        self.skip_to_next_statement()
-                        return
+            elif self.current_token and self.current_token[1] == "DEREF_KEYWORD":
+                self.dereference_statement()  # Handle deref(identifier)
             else:
                 self.errors.append(
-                    f"Syntax Error (Line {self.current_token[2]}): Expected format string in print statement"
+                    f"Syntax Error (Line {self.current_token[2]}): Expected format string or valid expression in print statement"
                 )
                 self.skip_to_next_statement()
                 return
+
+            # Handle additional arguments separated by commas
+            while self.current_token and self.current_token[1] == "DEL_COMMA":
+                self.match("DEL_COMMA")
+
+                if self.current_token and self.current_token[1] == "IDENTIFIER":
+                    if self.peek() and self.peek()[1] == "DOT_OPERATOR":
+                        self.struct_member_access()
+                    else:
+                        self.expression()
+                elif self.current_token and self.current_token[1] == "DEREF_KEYWORD":
+                    self.dereference_statement()  # Handle deref(identifier)
+                else:
+                    self.errors.append(
+                        f"Syntax Error (Line {self.current_token[2]}): Unexpected token '{self.current_token[0]}' in print statement"
+                    )
+                    self.skip_to_next_statement()
+                    return
 
             self.match("DEL_RPAREN")
             self.match("DEL_SEMICOLON")
@@ -404,6 +418,13 @@ class SyntaxAnalyzer:
 
         else:
             self.errors.append("Syntax Error: Expected PRINT_KEYWORD or SCAN_KEYWORD")
+
+    def dereference_statement(self):
+        """Parses deref(identifier) expressions."""
+        self.match("DEREF_KEYWORD")
+        self.match("DEL_LPAREN")
+        self.match("IDENTIFIER")  # Match the identifier inside deref()
+        self.match("DEL_RPAREN")
 
     def memory_management_statement(self):
         if self.current_token[1] == "ALLOCATE_KEYWORD":
