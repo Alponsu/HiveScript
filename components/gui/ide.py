@@ -118,7 +118,6 @@ class HiveScriptIDE:
             messagebox.showwarning("Warning", "No code to analyze.")
             return
 
-        # Tokenize the code
         tokens = self.lexical_analyzer.tokenize(code)
 
         # Pass the tokens to the SyntaxAnalyzer

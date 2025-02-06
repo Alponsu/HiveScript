@@ -477,8 +477,8 @@ class SyntaxAnalyzer:
     def struct_statement(self):
         """Parse struct definitions, ensuring members are declared but not initialized."""
         self.match("STRUCT_KEYWORD")
-        self.match("IDENTIFIER")  # Match struct name
-        self.match("DEL_LCURLY")  # Match `{` opening brace
+        self.match("IDENTIFIER")
+        self.match("DEL_LCURLY")
 
         while self.current_token and self.current_token[1] != "DEL_RCURLY":
             if self.current_token[1] in ["INTEGER_KEYWORD", "FLOAT_KEYWORD", "DOUBLE_KEYWORD",
